@@ -15,11 +15,17 @@ interface SettingsPageProps {
 export function SettingsPage({ userId, onLogout }: SettingsPageProps) {
   const settings = useQuery(api.settings.get, userId ? { userId } : "skip");
   const updateSettings = useMutation(api.settings.update);
+  const updateSecretCode = useMutation(api.users.updateSecretCode);
   const { theme, setTheme } = useTheme();
 
   const [treatmentTypes, setTreatmentTypes] = useState<string[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
   
+  // Password change state
+  const [newSecretCode, setNewSecretCode] = useState("");
+  const [showSecretCode, setShowSecretCode] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
   // Modal states
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -41,6 +47,26 @@ export function SettingsPage({ userId, onLogout }: SettingsPageProps) {
       });
     } catch (error) {
       toast.error("עדכון ההגדרות נכשל");
+    }
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSecretCode.trim()) {
+      toast.error("אנא הכניסי קוד סודי חדש");
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      await updateSecretCode({ userId, newSecretCode: newSecretCode.trim() });
+      toast.success("הקוד הסודי עודכן בהצלחה");
+      setNewSecretCode("");
+      setShowSecretCode(false);
+    } catch (error) {
+      toast.error("עדכון הקוד הסודי נכשל");
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -200,6 +226,47 @@ export function SettingsPage({ userId, onLogout }: SettingsPageProps) {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Account Security Section */}
+      <div className="bg-white dark:bg-gray-900 rounded-container shadow-sm border border-gray-200 dark:border-gray-800 overflow-hidden transition-all duration-300">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
+          <h4 className="font-bold text-gray-700 dark:text-gray-300">אבטחת חשבון</h4>
+        </div>
+        <div className="p-6">
+          <form onSubmit={handlePasswordChange} className="space-y-4">
+            <div>
+              <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">קוד סודי חדש</label>
+              <div className="relative">
+                <input
+                  type={showSecretCode ? "text" : "password"}
+                  value={newSecretCode}
+                  onChange={(e) => setNewSecretCode(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-black text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                  placeholder="הכניסי קוד חדש..."
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSecretCode(!showSecretCode)}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                >
+                  {showSecretCode ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" y1="2" x2="22" y2="22"/></svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                  )}
+                </button>
+              </div>
+            </div>
+            <button
+              type="submit"
+              disabled={isChangingPassword || !newSecretCode.trim()}
+              className="w-full py-2.5 bg-primary text-white font-bold rounded-lg shadow-md hover:bg-primary-hover active:scale-[0.98] transition-all disabled:opacity-50"
+            >
+              {isChangingPassword ? "מעדכן..." : "עדכון קוד סודי"}
+            </button>
+          </form>
         </div>
       </div>
 

@@ -95,3 +95,14 @@ export const get = query({
     return await ctx.db.get(args.userId);
   },
 });
+
+export const updateSecretCode = mutation({
+  args: { userId: v.id("users"), newSecretCode: v.string() },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    await ctx.db.patch(args.userId, { secretCode: args.newSecretCode });
+  },
+});
