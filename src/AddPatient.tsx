@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { AddPatientModal } from "./AddPatientModal";
+import { Id } from "../convex/_generated/dataModel";
 
-export function AddPatient() {
+export function AddPatient({ userId }: { userId: Id<"users"> }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   return (
@@ -17,6 +18,7 @@ export function AddPatient() {
       <AddPatientModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
+        userId={userId}
       />
     </div>
   );

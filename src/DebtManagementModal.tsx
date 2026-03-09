@@ -12,16 +12,17 @@ interface DebtManagementModalProps {
     name: string;
     debt: number;
   } | null;
+  userId: Id<"users">;
 }
 
-export function DebtManagementModal({ isOpen, onClose, patient }: DebtManagementModalProps) {
+export function DebtManagementModal({ isOpen, onClose, patient, userId }: DebtManagementModalProps) {
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("cash");
   const amountInputRef = useRef<HTMLInputElement>(null);
   
   const createPayment = useMutation(api.payments.create);
   const updateDebtStatus = useMutation(api.patients.updateDebtStatus);
-  const settings = useQuery(api.settings.get);
+  const settings = useQuery(api.settings.get, userId ? { userId } : "skip");
 
   useEffect(() => {
     if (isOpen) {
@@ -47,6 +48,7 @@ export function DebtManagementModal({ isOpen, onClose, patient }: DebtManagement
       const isFullPayment = payAmount >= patient.debt;
       
       await createPayment({
+        userId,
         patientId: patient._id,
         amount: payAmount,
         date: new Date().toISOString().split("T")[0],
@@ -57,11 +59,13 @@ export function DebtManagementModal({ isOpen, onClose, patient }: DebtManagement
       // If full debt is covered, update status to paid
       if (isFullPayment) {
         await updateDebtStatus({
+          userId,
           patientId: patient._id,
           status: "paid"
         });
       } else {
         await updateDebtStatus({
+          userId,
           patientId: patient._id,
           status: "partial"
         });
@@ -78,6 +82,7 @@ export function DebtManagementModal({ isOpen, onClose, patient }: DebtManagement
     if (confirm(`האם את בטוחה שברצונך למחוק את החוב של ${patient.name}?`)) {
       try {
         await updateDebtStatus({
+          userId,
           patientId: patient._id,
           status: "cleared"
         });

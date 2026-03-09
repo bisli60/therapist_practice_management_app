@@ -5,9 +5,9 @@ import { useState } from "react";
 import { DebtManagementModal } from "./DebtManagementModal";
 import { Id } from "../convex/_generated/dataModel";
 
-export function Dashboard() {
-  const patients = useQuery(api.patients.list) || [];
-  const todayIncome = useQuery(api.payments.getTodayIncome) || 0;
+export function Dashboard({ userId }: { userId: Id<"users"> }) {
+  const patients = useQuery(api.patients.list, userId ? { userId } : "skip") || [];
+  const todayIncome = useQuery(api.payments.getTodayIncome, { userId }) || 0;
   
   const [selectedPatientForDebt, setSelectedPatientForDebt] = useState<{ _id: Id<"patients">, name: string, debt: number } | null>(null);
   const [isDebtModalOpen, setIsDebtModalOpen] = useState(false);
@@ -66,12 +66,13 @@ export function Dashboard() {
         </div>
       </div>
 
-      <RecentActivity />
+      <RecentActivity userId={userId} />
 
       <DebtManagementModal 
         isOpen={isDebtModalOpen} 
         onClose={() => setIsDebtModalOpen(false)} 
         patient={selectedPatientForDebt}
+        userId={userId}
       />
     </div>
   );

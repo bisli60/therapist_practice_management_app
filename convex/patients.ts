@@ -1,18 +1,14 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const list = query({
-  args: {},
-  handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-
+  args: { userId: v.optional(v.id("users")) },
+  handler: async (ctx, args) => {
+    if (!args.userId) return [];
+    
     const patients = await ctx.db
       .query("patients")
-      .withIndex("by_therapist", (q) => q.eq("therapistId", userId))
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .collect();
 
     // Calculate debt for each patient
@@ -50,17 +46,13 @@ export const list = query({
 
 export const updateDebtStatus = mutation({
   args: {
+    userId: v.id("users"),
     patientId: v.id("patients"),
     status: v.string(), // "paid", "partial", "cleared"
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-
     const patient = await ctx.db.get(args.patientId);
-    if (!patient || patient.therapistId !== userId) {
+    if (!patient || patient.userId !== args.userId) {
       throw new Error("Patient not found");
     }
 
@@ -86,7 +78,7 @@ export const updateDebtStatus = mutation({
         if (args.status === "paid") {
           // Record a payment for the full debt
           await ctx.db.insert("payments", {
-            therapistId: userId,
+            userId: args.userId,
             patientId: args.patientId,
             amount: debt,
             date: today,
@@ -103,7 +95,7 @@ export const updateDebtStatus = mutation({
         } else if (args.status === "cleared") {
           // Record a write-off payment
           await ctx.db.insert("payments", {
-            therapistId: userId,
+            userId: args.userId,
             patientId: args.patientId,
             amount: debt,
             date: today,
@@ -121,6 +113,7 @@ export const updateDebtStatus = mutation({
 
 export const create = mutation({
   args: {
+    userId: v.id("users"),
     name: v.string(),
     email: v.optional(v.string()),
     phone: v.optional(v.string()),
@@ -128,15 +121,10 @@ export const create = mutation({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-
-    const { sessionRate, ...rest } = args;
+    const { userId, sessionRate, ...rest } = args;
 
     return await ctx.db.insert("patients", {
-      therapistId: userId,
+      userId,
       sessionRate: sessionRate ?? 0,
       ...rest,
     });
@@ -144,15 +132,10 @@ export const create = mutation({
 });
 
 export const get = query({
-  args: { patientId: v.id("patients") },
+  args: { userId: v.id("users"), patientId: v.id("patients") },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-
     const patient = await ctx.db.get(args.patientId);
-    if (!patient || patient.therapistId !== userId) {
+    if (!patient || patient.userId !== args.userId) {
       throw new Error("Patient not found");
     }
 
@@ -161,15 +144,10 @@ export const get = query({
 });
 
 export const remove = mutation({
-  args: { patientId: v.id("patients") },
+  args: { userId: v.id("users"), patientId: v.id("patients") },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-
     const patient = await ctx.db.get(args.patientId);
-    if (!patient || patient.therapistId !== userId) {
+    if (!patient || patient.userId !== args.userId) {
       throw new Error("Patient not found");
     }
 
@@ -198,6 +176,7 @@ export const remove = mutation({
 
 export const update = mutation({
   args: {
+    userId: v.id("users"),
     patientId: v.id("patients"),
     name: v.string(),
     email: v.optional(v.string()),
@@ -206,17 +185,13 @@ export const update = mutation({
     notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-
     const patient = await ctx.db.get(args.patientId);
-    if (!patient || patient.therapistId !== userId) {
+    if (!patient || patient.userId !== args.userId) {
       throw new Error("Patient not found");
     }
 
-    const { patientId, ...updates } = args;
+    const { patientId, userId, ...updates } = args;
     await ctx.db.patch(patientId, updates);
   },
 });
+

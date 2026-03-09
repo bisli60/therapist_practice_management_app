@@ -4,7 +4,7 @@ import { api } from "../convex/_generated/api";
 import { toast } from "sonner";
 import { Id } from "../convex/_generated/dataModel";
 
-export function AddPayment() {
+export function AddPayment({ userId }: { userId: Id<"users"> }) {
   const [formData, setFormData] = useState({
     patientId: "",
     amount: "",
@@ -13,8 +13,8 @@ export function AddPayment() {
     notes: "",
   });
   
-  const patients = useQuery(api.patients.list) || [];
-  const payments = useQuery(api.payments.list, {}) || [];
+  const patients = useQuery(api.patients.list, userId ? { userId } : "skip") || [];
+  const payments = useQuery(api.payments.list, userId ? { userId } : "skip") || [];
   const createPayment = useMutation(api.payments.create);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -27,6 +27,7 @@ export function AddPayment() {
 
     try {
       await createPayment({
+        userId,
         patientId: formData.patientId as Id<"patients">,
         amount: parseFloat(formData.amount),
         date: formData.date,
@@ -164,7 +165,7 @@ export function AddPayment() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {payments.slice(0, 10).map((payment) => (
+              {payments.slice(0, 10).map((payment: any) => (
                 <tr key={payment._id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
                     {payment.patientName}

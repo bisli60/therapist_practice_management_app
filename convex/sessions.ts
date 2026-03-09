@@ -1,26 +1,24 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const list = query({
-  args: { patientId: v.optional(v.id("patients")) },
+  args: { userId: v.optional(v.id("users")), patientId: v.optional(v.id("patients")) },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-
+    if (!args.userId) return [];
+    
     let sessions;
     if (args.patientId) {
       sessions = await ctx.db
         .query("sessions")
-        .withIndex("by_patient", (q) => q.eq("patientId", args.patientId!))
+        .withIndex("by_user_and_patient", (q) => 
+          q.eq("userId", args.userId).eq("patientId", args.patientId!)
+        )
         .order("desc")
         .collect();
     } else {
       sessions = await ctx.db
         .query("sessions")
-        .withIndex("by_therapist", (q) => q.eq("therapistId", userId))
+        .withIndex("by_user", (q) => q.eq("userId", args.userId))
         .order("desc")
         .collect();
     }
@@ -46,6 +44,7 @@ export const list = query({
 
 export const create = mutation({
   args: {
+    userId: v.id("users"),
     patientId: v.id("patients"),
     date: v.string(),
     duration: v.number(),
@@ -55,21 +54,16 @@ export const create = mutation({
     paymentId: v.optional(v.id("payments")),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-
-    // Verify patient belongs to therapist
+    // Verify patient exists and belongs to user
     const patient = await ctx.db.get(args.patientId);
-    if (!patient || patient.therapistId !== userId) {
+    if (!patient || patient.userId !== args.userId) {
       throw new Error("Patient not found");
     }
 
-    const { isPaid, paymentId, ...rest } = args;
+    const { userId, isPaid, paymentId, ...rest } = args;
 
     return await ctx.db.insert("sessions", {
-      therapistId: userId,
+      userId,
       ...rest,
       isPaid: isPaid ?? false,
       paymentId,
@@ -79,6 +73,7 @@ export const create = mutation({
 
 export const update = mutation({
   args: {
+    userId: v.id("users"),
     sessionId: v.id("sessions"),
     patientId: v.optional(v.id("patients")),
     date: v.optional(v.string()),
@@ -90,17 +85,12 @@ export const update = mutation({
     paymentMethod: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-
     const session = await ctx.db.get(args.sessionId);
-    if (!session || session.therapistId !== userId) {
+    if (!session || session.userId !== args.userId) {
       throw new Error("Session not found");
     }
 
-    const { sessionId, paymentAmount, paymentMethod, ...updates } = args;
+    const { sessionId, userId, paymentAmount, paymentMethod, ...updates } = args;
     
     let newPaymentId = session.paymentId;
 
@@ -124,7 +114,7 @@ export const update = mutation({
       } else if (currentAmount > 0) {
         // Create new payment if it didn't exist
         newPaymentId = await ctx.db.insert("payments", {
-          therapistId: userId,
+          userId,
           patientId: args.patientId || session.patientId,
           amount: currentAmount,
           date: args.date || session.date,
@@ -142,15 +132,10 @@ export const update = mutation({
 });
 
 export const remove = mutation({
-  args: { sessionId: v.id("sessions") },
+  args: { userId: v.id("users"), sessionId: v.id("sessions") },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-
     const session = await ctx.db.get(args.sessionId);
-    if (!session || session.therapistId !== userId) {
+    if (!session || session.userId !== args.userId) {
       throw new Error("Session not found");
     }
 
@@ -167,15 +152,10 @@ export const remove = mutation({
 });
 
 export const markAsPaid = mutation({
-  args: { sessionId: v.id("sessions") },
+  args: { userId: v.id("users"), sessionId: v.id("sessions") },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-
     const session = await ctx.db.get(args.sessionId);
-    if (!session || session.therapistId !== userId) {
+    if (!session || session.userId !== args.userId) {
       throw new Error("Session not found");
     }
 

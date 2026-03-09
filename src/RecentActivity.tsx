@@ -3,6 +3,8 @@ import { api } from "../convex/_generated/api";
 import { useState } from "react";
 import { AddSessionModal } from "./AddSessionModal";
 
+import { Id } from "../convex/_generated/dataModel";
+
 type ActivityType = "treatment_income" | "debt_entry" | "debt_settlement";
 
 type Activity = {
@@ -18,9 +20,9 @@ type Activity = {
   isPartialSettlement?: boolean;
 };
 
-export function RecentActivity() {
-  const sessions = useQuery(api.sessions.list, {}) || [];
-  const payments = useQuery(api.payments.list, {}) || [];
+export function RecentActivity({ userId }: { userId: Id<"users"> }) {
+  const sessions = useQuery(api.sessions.list, { userId }) || [];
+  const payments = useQuery(api.payments.list, { userId }) || [];
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSession, setEditingSession] = useState<any>(null);
@@ -228,6 +230,7 @@ export function RecentActivity() {
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
         editingSession={editingSession}
+        userId={userId}
       />
     </div>
   );

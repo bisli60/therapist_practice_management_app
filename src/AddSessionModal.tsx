@@ -8,9 +8,10 @@ interface AddSessionModalProps {
   isOpen: boolean;
   onClose: () => void;
   editingSession?: any;
+  userId: Id<"users">;
 }
 
-export function AddSessionModal({ isOpen, onClose, editingSession }: AddSessionModalProps) {
+export function AddSessionModal({ isOpen, onClose, editingSession, userId }: AddSessionModalProps) {
   const [formData, setFormData] = useState({
     patientId: "",
     date: new Date().toISOString().split("T")[0],
@@ -25,8 +26,8 @@ export function AddSessionModal({ isOpen, onClose, editingSession }: AddSessionM
   const [patientSearch, setPatientSearch] = useState("");
   const patientSearchRef = useRef<HTMLInputElement>(null);
 
-  const patients = useQuery(api.patients.list) || [];
-  const settings = useQuery(api.settings.get);
+  const patients = useQuery(api.patients.list, userId ? { userId } : "skip") || [];
+  const settings = useQuery(api.settings.get, userId ? { userId } : "skip");
   
   const createSession = useMutation(api.sessions.create);
   const updateSession = useMutation(api.sessions.update);
@@ -86,9 +87,9 @@ export function AddSessionModal({ isOpen, onClose, editingSession }: AddSessionM
   };
 
   const handleDelete = async () => {
-    if (confirm("האם את בטוחה שברצונך למחוק את הטיפול?")) {
+    if (confirm("האם את בטובה שברצונך למחוק את הטיפול?")) {
       try {
-        await removeSession({ sessionId: editingSession._id });
+        await removeSession({ sessionId: editingSession._id, userId });
         toast.success("הטיפול נמחק בהצלחה");
         onClose();
       } catch (error: any) {
@@ -114,6 +115,7 @@ export function AddSessionModal({ isOpen, onClose, editingSession }: AddSessionM
       if (editingSession) {
         await updateSession({
           sessionId: editingSession._id,
+          userId,
           patientId: formData.patientId as Id<"patients">,
           date: formData.date,
           cost: sessionCost,
@@ -128,6 +130,7 @@ export function AddSessionModal({ isOpen, onClose, editingSession }: AddSessionM
 
         if (paidAmount > 0) {
           paymentId = await createPayment({
+            userId,
             patientId: formData.patientId as Id<"patients">,
             amount: paidAmount,
             date: formData.date,
@@ -137,6 +140,7 @@ export function AddSessionModal({ isOpen, onClose, editingSession }: AddSessionM
         }
 
         await createSession({
+          userId,
           patientId: formData.patientId as Id<"patients">,
           date: formData.date,
           duration: 50,

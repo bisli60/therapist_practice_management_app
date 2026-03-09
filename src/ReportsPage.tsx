@@ -15,15 +15,17 @@ import {
   Pie,
 } from "recharts";
 
+import { Id } from "../convex/_generated/dataModel";
+
 const COLORS = ["#10b981", "#3b82f6", "#6366f1", "#8b5cf6", "#f59e0b", "#06b6d4"];
 
 type TimeRange = '7d' | '30d' | 'ytd';
 
-export function ReportsPage() {
+export function ReportsPage({ userId }: { userId: Id<"users"> }) {
   const [timeRange, setTimeRange] = useState<TimeRange>('30d');
   
-  const sessions = useQuery(api.sessions.list, {}) || [];
-  const payments = useQuery(api.payments.list, {}) || [];
+  const sessions = useQuery(api.sessions.list, { userId }) || [];
+  const payments = useQuery(api.payments.list, { userId }) || [];
 
   const filterDataByRange = (data: any[]) => {
     const now = new Date();
@@ -38,7 +40,7 @@ export function ReportsPage() {
     }
     
     return data.filter(item => {
-      const itemDate = new Date(item.date || item.startTime);
+      const itemDate = new Date(item.date || (item as any)._creationTime);
       return itemDate >= startDate;
     });
   };
@@ -51,7 +53,7 @@ export function ReportsPage() {
     else if (timeRange === '30d') startDate.setDate(now.getDate() - 30);
     else if (timeRange === 'ytd') startDate = new Date(now.getFullYear(), 0, 1);
 
-    return sessions.filter(s => new Date(s.startTime) >= startDate);
+    return sessions.filter(s => new Date(s.date || (s as any)._creationTime) >= startDate);
   }, [sessions, timeRange]);
 
   const parseTreatmentType = (notes?: string) => {

@@ -24,9 +24,10 @@ interface Patient {
 interface PatientListProps {
   patients: Patient[];
   showActions?: boolean;
+  userId: Id<"users">;
 }
 
-export function PatientList({ patients, showActions = false }: PatientListProps) {
+export function PatientList({ patients, showActions = false, userId }: PatientListProps) {
   const [selectedPatientForDebt, setSelectedPatientForDebt] = useState<{ _id: Id<"patients">, name: string, debt: number } | null>(null);
   const [isDebtModalOpen, setIsDebtModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -98,7 +99,7 @@ export function PatientList({ patients, showActions = false }: PatientListProps)
 
   return (
     <div className="space-y-6 pb-12 transition-colors duration-300">
-      {showActions && <AddPatient />}
+      {showActions && <AddPatient userId={userId} />}
 
       {/* Search Bar */}
       <div className="relative mx-1">
@@ -265,6 +266,7 @@ export function PatientList({ patients, showActions = false }: PatientListProps)
         isOpen={isDebtModalOpen} 
         onClose={() => setIsDebtModalOpen(false)} 
         patient={selectedPatientForDebt}
+        userId={userId}
       />
 
       <AddPatientModal
@@ -274,6 +276,7 @@ export function PatientList({ patients, showActions = false }: PatientListProps)
           setPatientToEdit(null);
         }}
         editingPatient={patientToEdit}
+        userId={userId}
       />
     </div>
   );

@@ -5,11 +5,11 @@ import { toast } from "sonner";
 import { Id } from "../convex/_generated/dataModel";
 import { AddSessionModal } from "./AddSessionModal";
 
-export function AddSession() {
+export function AddSession({ userId }: { userId: Id<"users"> }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSession, setEditingSession] = useState<any>(null);
   
-  const sessions = useQuery(api.sessions.list, {}) || [];
+  const sessions = useQuery(api.sessions.list, { userId }) || [];
   const removeSession = useMutation(api.sessions.remove);
 
   // Long press & Context Menu state
@@ -72,8 +72,11 @@ export function AddSession() {
   const groupedSessions = useMemo(() => {
     const groups: { [key: string]: typeof sessions } = {};
     
-    // Sort all sessions by startTime newest first
-    const sortedSessions = [...sessions].sort((a, b) => b.startTime - a.startTime);
+    // Sort all sessions by date and creation time newest first
+    const sortedSessions = [...sessions].sort((a, b) => {
+      if (b.date !== a.date) return b.date.localeCompare(a.date);
+      return ((b as any)._creationTime || 0) - ((a as any)._creationTime || 0);
+    });
 
     sortedSessions.forEach(session => {
       const dateKey = session.date; // Use the date string as key
@@ -165,7 +168,7 @@ export function AddSession() {
                                 {session.patientName}
                               </h4>
                               <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500 mt-0.5">
-                                {new Date(session.startTime).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
+                                {new Date((session as any)._creationTime || session.date).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
                               </p>
                             </div>
                           </div>
@@ -242,6 +245,7 @@ export function AddSession() {
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
         editingSession={editingSession}
+        userId={userId}
       />
     </div>
   );

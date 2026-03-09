@@ -1,26 +1,24 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const list = query({
-  args: { patientId: v.optional(v.id("patients")) },
+  args: { userId: v.optional(v.id("users")), patientId: v.optional(v.id("patients")) },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-
+    if (!args.userId) return [];
+    
     let payments;
     if (args.patientId) {
       payments = await ctx.db
         .query("payments")
-        .withIndex("by_patient", (q) => q.eq("patientId", args.patientId!))
+        .withIndex("by_user_and_patient", (q) => 
+          q.eq("userId", args.userId).eq("patientId", args.patientId!)
+        )
         .order("desc")
         .collect();
     } else {
       payments = await ctx.db
         .query("payments")
-        .withIndex("by_therapist", (q) => q.eq("therapistId", userId))
+        .withIndex("by_user", (q) => q.eq("userId", args.userId))
         .order("desc")
         .collect();
     }
@@ -42,6 +40,7 @@ export const list = query({
 
 export const create = mutation({
   args: {
+    userId: v.id("users"),
     patientId: v.id("patients"),
     amount: v.number(),
     date: v.string(),
@@ -50,35 +49,28 @@ export const create = mutation({
     isWriteOff: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-
-    // Verify patient belongs to therapist
+    // Verify patient exists and belongs to user
     const patient = await ctx.db.get(args.patientId);
-    if (!patient || patient.therapistId !== userId) {
+    if (!patient || patient.userId !== args.userId) {
       throw new Error("Patient not found");
     }
 
+    const { userId, ...rest } = args;
     return await ctx.db.insert("payments", {
-      therapistId: userId,
-      ...args,
+      userId,
+      ...rest,
     });
   },
 });
 
 export const getTotalIncome = query({
-  args: {},
-  handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-
+  args: { userId: v.optional(v.id("users")) },
+  handler: async (ctx, args) => {
+    if (!args.userId) return 0;
+    
     const payments = await ctx.db
       .query("payments")
-      .withIndex("by_therapist", (q) => q.eq("therapistId", userId))
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .collect();
 
     return payments
@@ -88,17 +80,14 @@ export const getTotalIncome = query({
 });
 
 export const getTodayIncome = query({
-  args: {},
-  handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Not authenticated");
-    }
-
+  args: { userId: v.optional(v.id("users")) },
+  handler: async (ctx, args) => {
+    if (!args.userId) return 0;
+    
     const today = new Date().toISOString().split("T")[0];
     const payments = await ctx.db
       .query("payments")
-      .withIndex("by_therapist", (q) => q.eq("therapistId", userId))
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .collect();
 
     return payments

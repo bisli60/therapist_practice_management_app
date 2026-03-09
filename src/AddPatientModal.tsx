@@ -12,16 +12,17 @@ interface AddPatientModalProps {
     name: string;
     notes?: string;
   } | null;
+  userId: Id<"users">;
 }
 
-export function AddPatientModal({ isOpen, onClose, editingPatient }: AddPatientModalProps) {
+export function AddPatientModal({ isOpen, onClose, editingPatient, userId }: AddPatientModalProps) {
   const [formData, setFormData] = useState({
     name: "",
     notes: "",
   });
   
   const nameInputRef = useRef<HTMLInputElement>(null);
-  const patients = useQuery(api.patients.list) || [];
+  const patients = useQuery(api.patients.list, userId ? { userId } : "skip") || [];
   const createPatient = useMutation(api.patients.create);
   const updatePatient = useMutation(api.patients.update);
 
@@ -44,7 +45,7 @@ export function AddPatientModal({ isOpen, onClose, editingPatient }: AddPatientM
 
   const normalizedName = formData.name.trim().toLowerCase();
   const isDuplicate = !editingPatient && normalizedName !== "" && patients.some(
-    (p) => p.name.trim().toLowerCase() === normalizedName
+    (p: any) => p.name.trim().toLowerCase() === normalizedName
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -63,6 +64,7 @@ export function AddPatientModal({ isOpen, onClose, editingPatient }: AddPatientM
     try {
       if (editingPatient) {
         await updatePatient({
+          userId,
           patientId: editingPatient._id,
           name: formData.name.trim(),
           notes: formData.notes || undefined,
@@ -71,6 +73,7 @@ export function AddPatientModal({ isOpen, onClose, editingPatient }: AddPatientM
         toast.success("פרטי המטופלת עודכנו");
       } else {
         await createPatient({
+          userId,
           name: formData.name.trim(),
           sessionRate: 0,
           notes: formData.notes || undefined,

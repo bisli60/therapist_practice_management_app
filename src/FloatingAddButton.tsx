@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { AddSessionModal } from "./AddSessionModal";
+import { Id } from "../convex/_generated/dataModel";
 
-export function FloatingAddButton() {
+export function FloatingAddButton({ userId }: { userId: Id<"users"> }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   return (
@@ -30,6 +31,7 @@ export function FloatingAddButton() {
       <AddSessionModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+        userId={userId}
       />
     </>
   );

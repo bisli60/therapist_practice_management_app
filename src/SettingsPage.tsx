@@ -2,13 +2,18 @@ import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { toast } from "sonner";
-import { SignOutButton } from "./SignOutButton";
 import { useTheme, Theme } from "./lib/useTheme";
+import { Id } from "../convex/_generated/dataModel";
 
 type ModalType = "treatment" | "payment" | null;
 
-export function SettingsPage() {
-  const settings = useQuery(api.settings.get);
+interface SettingsPageProps {
+  userId: Id<"users">;
+  onLogout: () => void;
+}
+
+export function SettingsPage({ userId, onLogout }: SettingsPageProps) {
+  const settings = useQuery(api.settings.get, userId ? { userId } : "skip");
   const updateSettings = useMutation(api.settings.update);
   const { theme, setTheme } = useTheme();
 
@@ -30,6 +35,7 @@ export function SettingsPage() {
   const saveSettings = async (newTypes: string[], newMethods: string[]) => {
     try {
       await updateSettings({
+        userId,
         treatmentTypes: newTypes,
         paymentMethods: newMethods,
       });
@@ -101,7 +107,13 @@ export function SettingsPage() {
     setActiveModal(null);
   };
 
-  if (!settings) return null;
+  if (settings === undefined) {
+    return (
+      <div className="flex justify-center items-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 pb-12 transition-colors duration-300">
@@ -191,13 +203,14 @@ export function SettingsPage() {
         </div>
       </div>
 
-      {/* Account Section */}
-      <div className="bg-white dark:bg-gray-900 p-6 rounded-container shadow-sm border border-red-50 dark:border-red-900/20 space-y-4 transition-all duration-300">
-        <h4 className="font-bold text-red-600 dark:text-red-400">חשבון</h4>
-        <p className="text-sm text-gray-500 dark:text-gray-400">התנתקות מהמערכת ומעבר למסך הכניסה</p>
-        <div className="w-full">
-          <SignOutButton />
-        </div>
+      {/* Logout Section */}
+      <div className="pt-4">
+        <button
+          onClick={onLogout}
+          className="w-full py-4 bg-white dark:bg-gray-900 text-red-600 dark:text-red-400 font-bold rounded-container shadow-sm border border-gray-200 dark:border-gray-800 hover:bg-red-50 dark:hover:bg-red-900/10 transition-all active:scale-[0.99]"
+        >
+          התנתקות מהמערכת
+        </button>
       </div>
 
       {/* Shared Modal for Treatment Types & Payment Methods */}
