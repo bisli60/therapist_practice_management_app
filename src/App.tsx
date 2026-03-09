@@ -43,7 +43,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#fbfbfd] dark:bg-black pb-20 transition-colors duration-500">
-      <div className="bg-primary text-white p-1 text-[8px] text-center">App Loaded</div>
       <main className="flex-1 p-4 pt-8">
         <Content activeTab={activeTab} userId={userId} onLogout={handleLogout} />
       </main>
