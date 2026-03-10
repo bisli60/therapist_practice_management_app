@@ -187,11 +187,11 @@ export function SettingsPage({ userId, onLogout }: SettingsPageProps) {
           {treatmentTypes.map((type, index) => (
             <div key={index} className="px-6 py-4 flex justify-between items-center group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
               <span className="font-medium text-gray-800 dark:text-gray-200">{type}</span>
-              <div className="flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => openTreatmentModal(index)} className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300" title="עריכה">
+              <div className="flex gap-3">
+                <button onClick={() => openTreatmentModal(index)} className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 opacity-40 hover:opacity-100 transition-opacity" title="עריכה">
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                 </button>
-                <button onClick={() => handleDeleteTreatment(index)} className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300" title="מחיקה">
+                <button onClick={() => handleDeleteTreatment(index)} className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 opacity-40 hover:opacity-100 transition-opacity" title="מחיקה">
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                 </button>
               </div>
@@ -216,11 +216,11 @@ export function SettingsPage({ userId, onLogout }: SettingsPageProps) {
           {paymentMethods.map((method, index) => (
             <div key={index} className="px-6 py-4 flex justify-between items-center group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
               <span className="font-medium text-gray-800 dark:text-gray-200">{method}</span>
-              <div className="flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => openPaymentModal(index)} className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300" title="עריכה">
+              <div className="flex gap-3">
+                <button onClick={() => openPaymentModal(index)} className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 opacity-40 hover:opacity-100 transition-opacity" title="עריכה">
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                 </button>
-                <button onClick={() => handleDeletePayment(index)} className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300" title="מחיקה">
+                <button onClick={() => handleDeletePayment(index)} className="text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 opacity-40 hover:opacity-100 transition-opacity" title="מחיקה">
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                 </button>
               </div>
@@ -282,9 +282,9 @@ export function SettingsPage({ userId, onLogout }: SettingsPageProps) {
 
       {/* Shared Modal for Treatment Types & Payment Methods */}
       {activeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-300">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-300">
           <div 
-            className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-md transition-opacity"
+            className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-md transition-opacity"
             onClick={() => setActiveModal(null)}
           />
           <div className="relative w-full max-w-sm bg-white dark:bg-gray-900 rounded-container shadow-2xl border border-gray-100 dark:border-gray-800 transform transition-all animate-in fade-in zoom-in duration-200">

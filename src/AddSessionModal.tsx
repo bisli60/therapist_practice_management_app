@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { toast } from "sonner";
 import { Id } from "../convex/_generated/dataModel";
+import { AddPatientModal } from "./AddPatientModal";
 
 interface AddSessionModalProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ export function AddSessionModal({ isOpen, onClose, editingSession, userId }: Add
   });
 
   const [isPatientPickerOpen, setIsPatientPickerOpen] = useState(false);
+  const [isAddPatientModalOpen, setIsAddPatientModalOpen] = useState(false);
   const [patientSearch, setPatientSearch] = useState("");
   const patientSearchRef = useRef<HTMLInputElement>(null);
 
@@ -86,14 +88,27 @@ export function AddSessionModal({ isOpen, onClose, editingSession, userId }: Add
     setPatientSearch("");
   };
 
+  const handlePatientAdded = (patientId: Id<"patients">) => {
+    // When a patient is added, they might not be in the 'patients' query result yet
+    // But we want to select them immediately.
+    setFormData(prev => ({
+      ...prev,
+      patientId: patientId,
+      // Default to 0 if we don't have the rate yet, though usually AddPatientModal sets it to 0 anyway
+      price: prev.price || "0",
+      amountPaid: prev.amountPaid || "0",
+    }));
+  };
+
   const handleDelete = async () => {
-    if (confirm("האם את בטובה שברצונך למחוק את הטיפול?")) {
+    if (confirm("האם את בטוחה שברצונך למחוק את הטיפול?")) {
       try {
         await removeSession({ sessionId: editingSession._id, userId });
         toast.success("הטיפול נמחק בהצלחה");
         onClose();
       } catch (error: any) {
-        toast.error(`מחיקת הטיפול נכשלה: ${error.message}`);
+        console.error("Error deleting session:", error);
+        toast.error(`מחיקת הטיפול נכשלה: ${error.message || "שגיאה לא ידועה"}`);
       }
     }
   };
@@ -120,35 +135,38 @@ export function AddSessionModal({ isOpen, onClose, editingSession, userId }: Add
           date: formData.date,
           cost: sessionCost,
           notes: treatmentNote,
+          category: formData.treatmentType || "טיפול",
           isPaid,
           paymentAmount: paidAmount,
           paymentMethod: formData.paymentMethod,
         });
         toast.success("הטיפול עודכן בהצלחה");
       } else {
-        let paymentId: Id<"payments"> | undefined;
-
-        if (paidAmount > 0) {
-          paymentId = await createPayment({
-            userId,
-            patientId: formData.patientId as Id<"patients">,
-            amount: paidAmount,
-            date: formData.date,
-            method: formData.paymentMethod || "cash",
-            notes: `תשלום עבור טיפול ${formData.treatmentType}`,
-          });
-        }
-
-        await createSession({
+        // Create the session first
+        const sessionId = await createSession({
           userId,
           patientId: formData.patientId as Id<"patients">,
           date: formData.date,
           duration: 50,
           cost: sessionCost,
           notes: treatmentNote,
-          isPaid,
-          paymentId,
+          category: formData.treatmentType || "טיפול",
+          isPaid, // Initially set based on UI calculation
         });
+
+        // If there's a payment, create it and link it to the session
+        if (paidAmount > 0) {
+          await createPayment({
+            userId,
+            patientId: formData.patientId as Id<"patients">,
+            sessionId: sessionId, // This will trigger the backend update for session.paymentId and session.isPaid
+            amount: paidAmount,
+            date: formData.date,
+            method: formData.paymentMethod || "cash",
+            notes: `תשלום עבור טיפול ${formData.treatmentType}`,
+          });
+        }
+        
         toast.success("הטיפול תועד בהצלחה");
       }
       onClose();
@@ -160,9 +178,9 @@ export function AddSessionModal({ isOpen, onClose, editingSession, userId }: Add
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 transition-all duration-300">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 transition-all duration-300">
       <div 
-        className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity" 
+        className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity" 
         onClick={onClose}
       />
       
@@ -180,21 +198,32 @@ export function AddSessionModal({ isOpen, onClose, editingSession, userId }: Add
           {/* Enhanced Patient Picker */}
           <div className="relative">
             <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">מטופלת *</label>
-            <button
-              type="button"
-              onClick={() => setIsPatientPickerOpen(!isPatientPickerOpen)}
-              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-black text-gray-900 dark:text-white flex justify-between items-center focus:ring-2 focus:ring-primary transition-all text-right"
-            >
-              {selectedPatient ? (
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${selectedPatient.debt > 0 ? 'bg-red-500' : selectedPatient.debt < 0 ? 'bg-green-500' : 'bg-gray-300'}`} />
-                  <span>{selectedPatient.name}</span>
-                </div>
-              ) : (
-                <span className="text-gray-400">בחרי מטופלת...</span>
-              )}
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-9"/></svg>
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setIsPatientPickerOpen(!isPatientPickerOpen)}
+                className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-black text-gray-900 dark:text-white flex justify-between items-center focus:ring-2 focus:ring-primary transition-all text-right"
+              >
+                {selectedPatient ? (
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${selectedPatient.debt > 0 ? 'bg-red-500' : selectedPatient.debt < 0 ? 'bg-green-500' : 'bg-gray-300'}`} />
+                    <span>{selectedPatient.name}</span>
+                  </div>
+                ) : (
+                  <span className="text-gray-400">בחרי מטופלת...</span>
+                )}
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-9"/></svg>
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => setIsAddPatientModalOpen(true)}
+                className="p-2.5 bg-primary/10 dark:bg-primary/20 text-primary dark:text-white border border-primary/20 dark:border-primary/40 rounded-lg hover:bg-primary/20 dark:hover:bg-primary/30 transition-all active:scale-95"
+                title="הוספת מטופלת חדשה"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></svg>
+              </button>
+            </div>
 
             {isPatientPickerOpen && (
               <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
@@ -261,12 +290,20 @@ export function AddSessionModal({ isOpen, onClose, editingSession, userId }: Add
             <div>
               <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">מחיר טיפול</label>
               <div className="relative">
-                <span className="absolute right-3 top-2.5 text-gray-400 dark:text-gray-500">₪</span>
+                <span className="absolute right-3 top-2.5 text-slate-400 dark:text-slate-500 pointer-events-none">₪</span>
                 <input
                   type="number"
+                  min="0"
                   value={formData.price}
-                  onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                  className="w-full pr-8 pl-4 py-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-black text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "" || parseFloat(val) >= 0) {
+                      setFormData({ ...formData, price: val });
+                    }
+                  }}
+                  onWheel={(e) => e.currentTarget.blur()}
+                  placeholder="0"
+                  className="w-full pr-10 pl-4 py-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-black text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   required
                 />
               </div>
@@ -274,12 +311,20 @@ export function AddSessionModal({ isOpen, onClose, editingSession, userId }: Add
             <div>
               <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">סכום ששולם</label>
               <div className="relative">
-                <span className="absolute right-3 top-2.5 text-gray-400 dark:text-gray-500">₪</span>
+                <span className="absolute right-3 top-2.5 text-slate-400 dark:text-slate-500 pointer-events-none">₪</span>
                 <input
                   type="number"
+                  min="0"
                   value={formData.amountPaid}
-                  onChange={(e) => setFormData({ ...formData, amountPaid: e.target.value })}
-                  className="w-full pr-8 pl-4 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-black text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "" || parseFloat(val) >= 0) {
+                      setFormData({ ...formData, amountPaid: val });
+                    }
+                  }}
+                  onWheel={(e) => e.currentTarget.blur()}
+                  placeholder="0"
+                  className="w-full pr-10 pl-4 py-2.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-black text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
               </div>
             </div>
@@ -336,6 +381,14 @@ export function AddSessionModal({ isOpen, onClose, editingSession, userId }: Add
           </div>
         </form>
       </div>
+
+      {/* Nested Add Patient Modal */}
+      <AddPatientModal
+        isOpen={isAddPatientModalOpen}
+        onClose={() => setIsAddPatientModalOpen(false)}
+        onSuccess={handlePatientAdded}
+        userId={userId}
+      />
     </div>
   );
 }

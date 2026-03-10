@@ -20,9 +20,16 @@ export function DebtManagementModal({ isOpen, onClose, patient, userId }: DebtMa
   const [method, setMethod] = useState("cash");
   const amountInputRef = useRef<HTMLInputElement>(null);
   
-  const createPayment = useMutation(api.payments.create);
+  const createPayment = useMutation(api.payments.createAndLinkToOldestUnpaid);
+  const settleDebt = useMutation(api.payments.settlePatientDebt);
   const updateDebtStatus = useMutation(api.patients.updateDebtStatus);
   const settings = useQuery(api.settings.get, userId ? { userId } : "skip");
+
+  useEffect(() => {
+    if (isOpen && patient) {
+      console.log(`DebtManagementModal: Viewing debt for ${patient.name}, current debt: ${patient.debt}`);
+    }
+  }, [isOpen, patient]);
 
   useEffect(() => {
     if (isOpen) {
@@ -34,6 +41,21 @@ export function DebtManagementModal({ isOpen, onClose, patient, userId }: DebtMa
   }, [isOpen]);
 
   if (!isOpen || !patient) return null;
+
+  const handleSettleDebt = async () => {
+    if (confirm(`האם למחוק את החוב של ${patient.name}? פעולה זו תבטל את יתרת החוב מבלי להחשיב זאת כהכנסה.`)) {
+      try {
+        await settleDebt({
+          userId,
+          patientId: patient._id
+        });
+        toast.success("החוב נמחק בהצלחה");
+        onClose();
+      } catch (error) {
+        toast.error("מחיקת החוב נכשלה");
+      }
+    }
+  };
 
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,20 +78,12 @@ export function DebtManagementModal({ isOpen, onClose, patient, userId }: DebtMa
         notes: isFullPayment ? "סגירת חוב" : "סגירת חוב חלקית",
       });
 
-      // If full debt is covered, update status to paid
-      if (isFullPayment) {
-        await updateDebtStatus({
-          userId,
-          patientId: patient._id,
-          status: "paid"
-        });
-      } else {
-        await updateDebtStatus({
-          userId,
-          patientId: patient._id,
-          status: "partial"
-        });
-      }
+      // Update debt status based on the payment
+      await updateDebtStatus({
+        userId,
+        patientId: patient._id,
+        status: isFullPayment ? "paid" : "partial"
+      });
 
       toast.success("התשלום עודכן בהצלחה");
       onClose();
@@ -78,66 +92,61 @@ export function DebtManagementModal({ isOpen, onClose, patient, userId }: DebtMa
     }
   };
 
-  const handleClearDebt = async () => {
-    if (confirm(`האם את בטוחה שברצונך למחוק את החוב של ${patient.name}?`)) {
-      try {
-        await updateDebtStatus({
-          userId,
-          patientId: patient._id,
-          status: "cleared"
-        });
-        toast.success("החוב נמחק בהצלחה");
-        onClose();
-      } catch (error) {
-        toast.error("מחיקת החוב נכשלה");
-      }
-    }
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-300">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-300">
       {/* Backdrop */}
       <div 
-        className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-md transition-opacity"
+        className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-md transition-opacity"
         onClick={onClose}
       />
       
       {/* Modal Content */}
-      <div className="relative w-full max-w-sm bg-white dark:bg-gray-900 rounded-container shadow-2xl border border-gray-100 dark:border-gray-800 transform transition-all animate-in fade-in zoom-in duration-200">
-        <div className="p-6 space-y-6">
-          <div className="text-center">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-              ניהול חוב: {patient.name}
+      <div className="relative w-full max-w-sm bg-white dark:bg-gray-900 rounded-container shadow-2xl border border-gray-100 dark:border-gray-800 transform transition-all animate-in fade-in zoom-in duration-200 max-h-[85vh] overflow-y-auto">
+        <div className="p-5 space-y-5">
+          <div className="text-center space-y-1">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+              ניהול חוב ל{patient.name}
             </h3>
-            <p className="text-sm text-red-600 dark:text-red-400 font-bold mt-1">
-              יתרת חוב נוכחית: ₪{patient.debt.toFixed(2)}
-            </p>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 dark:bg-red-900/10 rounded-full border border-red-100 dark:border-red-900/20">
+              <span className="text-[10px] font-black uppercase tracking-widest text-red-500">חוב:</span>
+              <span className="text-xs font-black text-red-600 dark:text-red-400">₪{patient.debt.toFixed(0)}</span>
+            </div>
           </div>
           
           <form onSubmit={handlePayment} className="space-y-4">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                סכום שהתקבל (₪)
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 text-center">
+                סכום שהתקבל
               </label>
-              <input
-                ref={amountInputRef}
-                type="number"
-                step="0.01"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-black text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none transition-all text-center text-xl font-black"
-                placeholder="0.00"
-              />
+              <div className="relative">
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-600 pointer-events-none text-lg font-light">₪</span>
+                <input
+                  ref={amountInputRef}
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={amount}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "" || parseFloat(val) >= 0) {
+                      setAmount(val);
+                    }
+                  }}
+                  onWheel={(e) => e.currentTarget.blur()}
+                  className="w-full pr-10 pl-4 py-2.5 border border-gray-100 dark:border-gray-800 rounded-xl bg-gray-50/30 dark:bg-black text-gray-900 dark:text-white focus:ring-4 focus:ring-primary/10 focus:border-primary outline-none transition-all text-center text-xl font-black shadow-inner [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  placeholder="0"
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 px-1">
                 אמצעי תשלום
               </label>
               <select
                 value={method}
                 onChange={(e) => setMethod(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-black text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none transition-all"
+                className="w-full px-4 py-2 border border-gray-100 dark:border-gray-800 rounded-xl bg-gray-50/50 dark:bg-gray-800/50 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/10 outline-none transition-all text-xs font-bold"
               >
                 {settings?.paymentMethods.map(m => (
                   <option key={m} value={m}>{m}</option>
@@ -145,41 +154,37 @@ export function DebtManagementModal({ isOpen, onClose, patient, userId }: DebtMa
               </select>
             </div>
 
-            <button
-              type="submit"
-              disabled={!amount}
-              className={`w-full py-3 font-bold rounded-lg transition-all active:scale-95 shadow-lg ${
-                !amount
-                  ? "bg-gray-200 dark:bg-gray-800 text-gray-400 cursor-not-allowed" 
-                  : "bg-green-600 text-white hover:bg-green-700"
-              }`}
-            >
-              אישור תשלום
-            </button>
+            <div className="space-y-2 pt-1">
+              <button
+                type="submit"
+                disabled={!amount}
+                className={`w-full py-2.5 font-bold rounded-xl transition-all active:scale-[0.98] shadow-lg text-sm ${
+                  !amount
+                    ? "bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed shadow-none" 
+                    : "bg-primary text-white hover:bg-primary-hover shadow-primary/20"
+                }`}
+              >
+                אישור תשלום
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSettleDebt}
+                className="w-full py-2 text-slate-500 dark:text-slate-400 text-[11px] font-bold rounded-xl bg-slate-50 dark:bg-slate-800/50 hover:bg-red-50 dark:hover:bg-red-900/10 hover:text-red-500 transition-all active:scale-[0.98] border border-slate-100 dark:border-slate-800/50"
+              >
+                ביטול/מחיקת יתרת החוב
+              </button>
+            </div>
           </form>
 
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center" aria-hidden="true">
-              <div className="w-full border-t border-gray-200 dark:border-gray-800"></div>
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white dark:bg-gray-900 px-2 text-gray-500">או</span>
-            </div>
+          <div className="text-center pt-1 border-t border-gray-50 dark:border-gray-800">
+            <button
+              onClick={onClose}
+              className="px-4 py-1.5 text-[10px] text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors font-bold uppercase tracking-widest"
+            >
+              סגירה
+            </button>
           </div>
-
-          <button
-            onClick={handleClearDebt}
-            className="w-full py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-all active:scale-95 border border-transparent hover:border-red-100 dark:hover:border-red-900/30"
-          >
-            מחיקת חוב (ללא תשלום)
-          </button>
-
-          <button
-            onClick={onClose}
-            className="w-full py-2 text-sm text-gray-500 dark:text-gray-400 hover:underline"
-          >
-            ביטול
-          </button>
         </div>
       </div>
     </div>

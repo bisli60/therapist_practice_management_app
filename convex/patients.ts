@@ -14,27 +14,50 @@ export const list = query({
     // Calculate debt for each patient
     const patientsWithDebt = await Promise.all(
       patients.map(async (patient) => {
-        // Get all sessions for this patient
+        // Get all active sessions for this patient
         const sessions = await ctx.db
           .query("sessions")
           .withIndex("by_patient", (q) => q.eq("patientId", patient._id))
           .collect();
+        const activeSessions = sessions.filter(s => !s.isDeleted);
+        const activeSessionIds = new Set(activeSessions.map(s => s._id.toString()));
 
-        // Get all payments for this patient
+        // Get all active payments for this patient
         const payments = await ctx.db
           .query("payments")
           .withIndex("by_patient", (q) => q.eq("patientId", patient._id))
           .collect();
+        
+        // A payment is valid for balance if:
+        // 1. It is not deleted (isDeleted !== true)
+        // 2. AND (It has no sessionId OR its sessionId points to an active session)
+        const validPayments = payments.filter(p => {
+          if (p.isDeleted) return false;
+          if (p.sessionId && !activeSessionIds.has(p.sessionId.toString())) return false;
+          return true;
+        });
 
-        const totalSessionCost = sessions.reduce((sum, session) => sum + session.cost, 0);
-        const totalPayments = payments.reduce((sum, payment) => sum + payment.amount, 0);
-        const debt = totalSessionCost - totalPayments;
+        const totalSessionCost = activeSessions.reduce((sum, session) => sum + session.cost, 0);
+        
+        // Separate actual income from adjustments (waived debt)
+        const totalPaid = validPayments
+          .filter(p => p.type === "income" || p.type === undefined) // legacy payments are usually income
+          .reduce((sum, p) => sum + p.amount, 0);
+          
+        const totalWaived = validPayments
+          .filter(p => p.type === "adjustment")
+          .reduce((sum, p) => sum + p.amount, 0);
+        
+        // debt = Cost - Waived - Paid
+        // If debt > 0, patient owes money. If < 0, patient has credit.
+        const debt = totalSessionCost - totalWaived - totalPaid;
 
         return {
           ...patient,
-          totalSessions: sessions.length,
+          totalSessions: activeSessions.length,
           totalSessionCost,
-          totalPayments,
+          totalPayments: totalPaid, // Now only shows actual money paid
+          totalWaived,
           debt,
         };
       })
@@ -59,20 +82,34 @@ export const updateDebtStatus = mutation({
     const today = new Date().toISOString().split("T")[0];
 
     if (args.status === "paid" || args.status === "cleared") {
-      // Calculate current debt
+      // Calculate current debt from non-deleted records
       const sessions = await ctx.db
         .query("sessions")
         .withIndex("by_patient", (q) => q.eq("patientId", args.patientId))
         .collect();
+      const activeSessions = sessions.filter(s => !s.isDeleted);
+      const activeSessionIds = new Set(activeSessions.map(s => s._id.toString()));
 
       const payments = await ctx.db
         .query("payments")
         .withIndex("by_patient", (q) => q.eq("patientId", args.patientId))
         .collect();
+      
+      const validPayments = payments.filter(p => {
+        if (p.isDeleted) return false;
+        if (p.sessionId && !activeSessionIds.has(p.sessionId.toString())) return false;
+        return true;
+      });
 
-      const totalSessionCost = sessions.reduce((sum, session) => sum + session.cost, 0);
-      const totalPayments = payments.reduce((sum, payment) => sum + payment.amount, 0);
-      const debt = totalSessionCost - totalPayments;
+      const totalSessionCost = activeSessions.reduce((sum, session) => sum + session.cost, 0);
+      const totalPaid = validPayments
+        .filter(p => p.type === "income" || p.type === undefined)
+        .reduce((sum, p) => sum + p.amount, 0);
+      const totalWaived = validPayments
+        .filter(p => p.type === "adjustment")
+        .reduce((sum, p) => sum + p.amount, 0);
+        
+      const debt = totalSessionCost - totalWaived - totalPaid;
 
       if (debt > 0) {
         if (args.status === "paid") {
@@ -84,24 +121,28 @@ export const updateDebtStatus = mutation({
             date: today,
             method: "other",
             notes: "תשלום חוב מלא",
+            type: "income",
+            isRevenue: true,
           });
           
-          // Also mark all sessions as paid
-          for (const session of sessions) {
+          // Also mark all active sessions as paid
+          for (const session of activeSessions) {
             if (!session.isPaid) {
               await ctx.db.patch(session._id, { isPaid: true });
             }
           }
         } else if (args.status === "cleared") {
-          // Record a write-off payment
+          // Record a write-off adjustment
           await ctx.db.insert("payments", {
             userId: args.userId,
             patientId: args.patientId,
             amount: debt,
             date: today,
             method: "other",
-            notes: "מחיקת חוב",
+            notes: "ביטול חוב",
             isWriteOff: true,
+            type: "adjustment",
+            isRevenue: false,
           });
         }
       }

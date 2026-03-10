@@ -10,6 +10,7 @@
 
 import type * as patients from "../patients.js";
 import type * as payments from "../payments.js";
+import type * as requests from "../requests.js";
 import type * as router from "../router.js";
 import type * as sessions from "../sessions.js";
 import type * as settings from "../settings.js";
@@ -24,6 +25,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   patients: typeof patients;
   payments: typeof payments;
+  requests: typeof requests;
   router: typeof router;
   sessions: typeof sessions;
   settings: typeof settings;

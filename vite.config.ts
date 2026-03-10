@@ -35,6 +35,15 @@ window.addEventListener('message', async (message) => {
       : null,
     // End of code for taking screenshots on chef.convex.dev.
   ].filter(Boolean),
+  server: {
+    host: '127.0.0.1', 
+    port: 5173,
+    strictPort: true,
+    hmr: {
+      host: '127.0.0.1',
+      protocol: 'ws',
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

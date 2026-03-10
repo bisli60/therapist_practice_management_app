@@ -19,42 +19,23 @@ import { Id } from "../convex/_generated/dataModel";
 
 const COLORS = ["#10b981", "#3b82f6", "#6366f1", "#8b5cf6", "#f59e0b", "#06b6d4"];
 
-type TimeRange = '7d' | '30d' | 'ytd';
-
 export function ReportsPage({ userId }: { userId: Id<"users"> }) {
-  const [timeRange, setTimeRange] = useState<TimeRange>('30d');
-  
+  const [firstChartView, setFirstChartView] = useState<'7d' | '12m'>('7d');
   const sessions = useQuery(api.sessions.list, { userId }) || [];
   const payments = useQuery(api.payments.list, { userId }) || [];
 
-  const filterDataByRange = (data: any[]) => {
-    const now = new Date();
-    let startDate = new Date();
-    
-    if (timeRange === '7d') {
-      startDate.setDate(now.getDate() - 7);
-    } else if (timeRange === '30d') {
-      startDate.setDate(now.getDate() - 30);
-    } else if (timeRange === 'ytd') {
-      startDate = new Date(now.getFullYear(), 0, 1);
-    }
-    
-    return data.filter(item => {
+  const filteredPayments = useMemo(() => {
+    const startDate = new Date(new Date().getFullYear(), 0, 1);
+    return payments.filter(item => {
       const itemDate = new Date(item.date || (item as any)._creationTime);
       return itemDate >= startDate;
     });
-  };
+  }, [payments]);
 
-  const filteredPayments = useMemo(() => filterDataByRange(payments), [payments, timeRange]);
   const filteredSessions = useMemo(() => {
-    const now = new Date();
-    let startDate = new Date();
-    if (timeRange === '7d') startDate.setDate(now.getDate() - 7);
-    else if (timeRange === '30d') startDate.setDate(now.getDate() - 30);
-    else if (timeRange === 'ytd') startDate = new Date(now.getFullYear(), 0, 1);
-
+    const startDate = new Date(new Date().getFullYear(), 0, 1);
     return sessions.filter(s => new Date(s.date || (s as any)._creationTime) >= startDate);
-  }, [sessions, timeRange]);
+  }, [sessions]);
 
   const parseTreatmentType = (notes?: string) => {
     if (!notes) return "טיפול";
@@ -65,7 +46,7 @@ export function ReportsPage({ userId }: { userId: Id<"users"> }) {
   const dailyData = useMemo(() => {
     const data = [];
     const today = new Date();
-    const daysToShow = timeRange === '7d' ? 7 : (timeRange === '30d' ? 30 : 30); // Show last 30 even for YTD to avoid overcrowding
+    const daysToShow = 7;
     
     for (let i = daysToShow - 1; i >= 0; i--) {
       const date = new Date(today);
@@ -76,25 +57,57 @@ export function ReportsPage({ userId }: { userId: Id<"users"> }) {
       const dayName = dayNames[date.getDay()];
 
       const dailyIncome = payments
-        .filter(p => p.date === dateStr && !p.isWriteOff)
+        .filter(p => {
+          if (p.date !== dateStr) return false;
+          if (p.isDeleted || p.isWriteOff || p.type === "adjustment" || p.isRevenue === false) return false;
+          return true;
+        })
         .reduce((sum, p) => sum + p.amount, 0);
 
       data.push({
-        name: daysToShow > 7 ? `${date.getDate()}/${date.getMonth() + 1}` : dayName,
+        name: dayName,
         income: dailyIncome,
         fullDate: date.toLocaleDateString("he-IL"),
       });
     }
     return data;
-  }, [payments, timeRange]);
+  }, [payments]);
+
+  const last12MonthsData = useMemo(() => {
+    const data = [];
+    const today = new Date();
+    
+    for (let i = 11; i >= 0; i--) {
+      const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const month = date.getMonth();
+      const year = date.getFullYear();
+      
+      const monthNames = ["ינו׳", "פבר׳", "מרץ", "אפר׳", "מאי", "יוני", "יולי", "אוג׳", "ספט׳", "אוק׳", "נוב׳", "דצמ׳"];
+      const monthName = monthNames[month];
+
+      const monthlyIncome = payments
+        .filter(p => {
+          const pDate = new Date(p.date);
+          const sameMonth = pDate.getMonth() === month && pDate.getFullYear() === year;
+          if (!sameMonth) return false;
+          if (p.isDeleted || p.isWriteOff || p.type === "adjustment" || p.isRevenue === false) return false;
+          return true;
+        })
+        .reduce((sum, p) => sum + p.amount, 0);
+
+      data.push({
+        name: monthName,
+        income: monthlyIncome,
+        fullDate: `${monthName} ${year}`,
+      });
+    }
+    return data;
+  }, [payments]);
 
   const monthlyData = useMemo(() => {
     const data = [];
     const today = new Date();
-    
-    let monthsToShow = 12;
-    if (timeRange === '7d' || timeRange === '30d') monthsToShow = 2; // Show current and previous
-    if (timeRange === 'ytd') monthsToShow = today.getMonth() + 1;
+    const monthsToShow = today.getMonth() + 1;
 
     for (let i = monthsToShow - 1; i >= 0; i--) {
       const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
@@ -107,7 +120,10 @@ export function ReportsPage({ userId }: { userId: Id<"users"> }) {
       const monthlyIncome = payments
         .filter(p => {
           const pDate = new Date(p.date);
-          return pDate.getMonth() === month && pDate.getFullYear() === year && !p.isWriteOff;
+          const sameMonth = pDate.getMonth() === month && pDate.getFullYear() === year;
+          if (!sameMonth) return false;
+          if (p.isDeleted || p.isWriteOff || p.type === "adjustment" || p.isRevenue === false) return false;
+          return true;
         })
         .reduce((sum, p) => sum + p.amount, 0);
 
@@ -118,38 +134,19 @@ export function ReportsPage({ userId }: { userId: Id<"users"> }) {
       });
     }
     return data;
-  }, [payments, timeRange]);
+  }, [payments]);
 
-  const typeData = useMemo(() => {
-    const typeMap: { [key: string]: number } = {};
-    let total = 0;
-
-    filteredPayments.forEach(payment => {
-      if (payment.isWriteOff) return;
-      
-      let type = "אחר";
-      const linkedSession = filteredSessions.find(s => s.paymentId === payment._id);
-      
-      if (linkedSession) {
-        type = parseTreatmentType(linkedSession.notes);
-      } else if (payment.notes?.includes("טיפול")) {
-        const match = payment.notes.match(/טיפול (.*)/);
-        if (match) type = match[1];
-      }
-
-      typeMap[type] = (typeMap[type] || 0) + payment.amount;
-      total += payment.amount;
-    });
-
-    return {
-      total,
-      data: Object.entries(typeMap).map(([name, value]) => ({
-        name,
-        value,
-        percentage: total > 0 ? (value / total * 100).toFixed(0) : 0
-      })).sort((a, b) => b.value - a.value)
+  const dateParams = useMemo(() => {
+    const startDate = new Date(new Date().getFullYear(), 0, 1);
+    return { 
+      startDate: startDate.toISOString().split("T")[0] 
     };
-  }, [filteredPayments, filteredSessions]);
+  }, []);
+
+  const typeData = useQuery(api.payments.getIncomeByCategory, { 
+    userId, 
+    ...dateParams 
+  }) || { data: [], total: 0 };
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -165,57 +162,53 @@ export function ReportsPage({ userId }: { userId: Id<"users"> }) {
     return null;
   };
 
-  const rangeOptions = [
-    { id: '7d' as TimeRange, label: 'השבוע האחרון' },
-    { id: '30d' as TimeRange, label: 'החודש האחרון' },
-    { id: 'ytd' as TimeRange, label: 'מתחילת השנה' },
-  ];
-
   return (
     <div className="space-y-6 pb-24 transition-colors duration-300">
       <div className="sticky top-0 z-30 pt-4 pb-2 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-md -mx-4 px-4 transition-colors duration-300">
         <div className="flex flex-col gap-4">
           <h3 className="text-2xl font-bold text-slate-900 dark:text-white px-1">דוחות</h3>
-          
-          {/* Segmented Control */}
-          <div className="relative bg-slate-100 dark:bg-slate-800 p-1 rounded-xl flex items-center self-center w-full max-w-md">
-            {/* Sliding Highlight */}
-            <div 
-              className="absolute h-[calc(100%-8px)] bg-white dark:bg-slate-700 rounded-lg shadow-sm transition-all duration-300 ease-out z-0"
-              style={{ 
-                width: `calc((100% - 8px) / 3)`,
-                transform: `translateX(calc(${rangeOptions.findIndex(o => o.id === timeRange) * -100}%))`
-              }}
-            />
-            {rangeOptions.map((option) => (
-              <button
-                key={option.id}
-                onClick={() => setTimeRange(option.id)}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-colors duration-300 relative z-10 ${
-                  timeRange === option.id 
-                    ? 'text-slate-900 dark:text-white' 
-                    : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
 
-      {/* Daily Chart */}
+      {/* First Chart: Daily or Monthly */}
       <div className="bg-white dark:bg-slate-900 p-6 rounded-container shadow-sm border border-slate-100 dark:border-slate-800 transition-all duration-300">
-        <div className="mb-8 text-center sm:text-right">
-          <h4 className="font-bold text-slate-800 dark:text-slate-200 text-lg">
-            {timeRange === '7d' ? 'הכנסות ב-7 ימים האחרונים' : 'הכנסות ב-30 ימים האחרונים'}
-          </h4>
-          <p className="text-xs text-slate-400 font-medium">סיכום יומי של תקבולים</p>
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8">
+          <div className="text-center sm:text-right">
+            <h4 className="font-bold text-slate-800 dark:text-slate-200 text-lg">
+              {firstChartView === '7d' ? 'הכנסות ב-7 ימים האחרונים' : 'הכנסות ב-12 חודשים האחרונים'}
+            </h4>
+            <p className="text-xs text-slate-400 font-medium">
+              {firstChartView === '7d' ? 'סיכום יומי של תקבולים' : 'סיכום חודשי של תקבולים'}
+            </p>
+          </div>
+
+          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+            <button
+              onClick={() => setFirstChartView('7d')}
+              className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                firstChartView === '7d' 
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' 
+                  : 'text-slate-400 hover:text-slate-600 dark:text-slate-500'
+              }`}
+            >
+              7 ימים
+            </button>
+            <button
+              onClick={() => setFirstChartView('12m')}
+              className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                firstChartView === '12m' 
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' 
+                  : 'text-slate-400 hover:text-slate-600 dark:text-slate-500'
+              }`}
+            >
+              12 חודשים
+            </button>
+          </div>
         </div>
         
         <div className="h-64 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={dailyData}>
+            <BarChart data={firstChartView === '7d' ? dailyData : last12MonthsData}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
               <XAxis 
                 dataKey="name" 
@@ -225,8 +218,12 @@ export function ReportsPage({ userId }: { userId: Id<"users"> }) {
                 dy={10}
               />
               <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc', opacity: 0.4 }} />
-              <Bar dataKey="income" radius={[6, 6, 0, 0]} barSize={timeRange === '7d' ? 32 : 12}>
-                {dailyData.map((entry, index) => (
+              <Bar 
+                dataKey="income" 
+                radius={[6, 6, 0, 0]} 
+                barSize={firstChartView === '7d' ? 32 : 16}
+              >
+                {(firstChartView === '7d' ? dailyData : last12MonthsData).map((entry, index) => (
                   <Cell key={`cell-${index}`} fill="#10b981" fillOpacity={entry.income === 0 ? 0.1 : 1} />
                 ))}
               </Bar>
@@ -239,7 +236,7 @@ export function ReportsPage({ userId }: { userId: Id<"users"> }) {
       <div className="bg-white dark:bg-slate-900 p-6 rounded-container shadow-sm border border-slate-100 dark:border-slate-800 transition-all duration-300">
         <div className="mb-8 text-center sm:text-right">
           <h4 className="font-bold text-slate-800 dark:text-slate-200 text-lg">פילוח הכנסות לפי סוג</h4>
-          <p className="text-xs text-slate-400 font-medium">חלוקה יחסית של סך ההכנסות לתקופה</p>
+          <p className="text-xs text-slate-400 font-medium">חלוקה יחסית של סך ההכנסות מתחילת השנה</p>
         </div>
 
         <div className="flex flex-col items-center">
@@ -247,16 +244,17 @@ export function ReportsPage({ userId }: { userId: Id<"users"> }) {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={typeData.data.length > 0 ? typeData.data : [{ name: "אין נתונים", value: 1 }]}
+                  data={typeData.data.length > 0 ? typeData.data : [{ category: "אין נתונים", value: 1 }]}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
                   outerRadius={80}
                   paddingAngle={5}
                   dataKey="value"
+                  nameKey="category"
                 >
                   {typeData.data.length > 0 ? (
-                    typeData.data.map((entry, index) => (
+                    typeData.data.map((entry: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
                     ))
                   ) : (
@@ -277,12 +275,14 @@ export function ReportsPage({ userId }: { userId: Id<"users"> }) {
           {/* Legend */}
           <div className="w-full mt-6 grid grid-cols-2 gap-3">
             {typeData.data.length > 0 ? (
-              typeData.data.map((entry, index) => (
-                <div key={entry.name} className="flex items-center gap-2">
+              typeData.data.map((entry: any, index: number) => (
+                <div key={entry.category} className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
                   <div className="flex flex-col min-w-0">
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{entry.name}</span>
-                    <span className="text-[10px] font-medium text-slate-400">{entry.percentage}%</span>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{entry.category}</span>
+                    <span className="text-[10px] font-medium text-slate-400">
+                      {typeData.total > 0 ? Math.round((entry.value / typeData.total) * 100) : 0}%
+                    </span>
                   </div>
                 </div>
               ))
@@ -297,7 +297,7 @@ export function ReportsPage({ userId }: { userId: Id<"users"> }) {
       <div className="bg-white dark:bg-slate-900 p-6 rounded-container shadow-sm border border-slate-100 dark:border-slate-800 transition-all duration-300">
         <div className="mb-8 text-center sm:text-right">
           <h4 className="font-bold text-slate-800 dark:text-slate-200 text-lg">
-            {timeRange === 'ytd' ? 'סיכום שנתי מתחילת השנה' : 'סיכום תקופתי'}
+            סיכום שנתי מתחילת השנה
           </h4>
           <p className="text-xs text-slate-400 font-medium">הכנסות מצטברות לפי חודש</p>
         </div>

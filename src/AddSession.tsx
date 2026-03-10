@@ -26,10 +26,11 @@ export function AddSession({ userId }: { userId: Id<"users"> }) {
   const handleDelete = async (id: Id<"sessions">) => {
     if (confirm("האם את בטוחה שברצונך למחוק את הטיפול?")) {
       try {
-        await removeSession({ sessionId: id });
+        await removeSession({ sessionId: id, userId });
         toast.success("הטיפול נמחק בהצלחה");
-      } catch (error) {
-        toast.error("מחיקת הטיפול נכשלה");
+      } catch (error: any) {
+        console.error("Error deleting session:", error);
+        toast.error(`מחיקת הטיפול נכשלה: ${error.message || "שגיאה לא ידועה"}`);
       }
     }
     setActiveMenuId(null);

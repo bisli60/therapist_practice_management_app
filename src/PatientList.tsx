@@ -31,6 +31,7 @@ export function PatientList({ patients, showActions = false, userId }: PatientLi
   const [selectedPatientForDebt, setSelectedPatientForDebt] = useState<{ _id: Id<"patients">, name: string, debt: number } | null>(null);
   const [isDebtModalOpen, setIsDebtModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<"name" | "debt">("name");
   
   // Menu states
   const [activeMenuPatientId, setActiveMenuPatientId] = useState<Id<"patients"> | null>(null);
@@ -53,10 +54,11 @@ export function PatientList({ patients, showActions = false, userId }: PatientLi
   const handleDelete = async (patient: Patient) => {
     if (confirm(`האם למחוק את המטופלת ${patient.name}? פעולה זו תמחק גם את כל היסטוריית הטיפולים שלה.`)) {
       try {
-        await removePatient({ patientId: patient._id });
+        await removePatient({ patientId: patient._id, userId });
         toast.success("המטופלת נמחקה בהצלחה");
-      } catch (error) {
-        toast.error("מחיקת המטופלת נכשלה");
+      } catch (error: any) {
+        console.error("Error deleting patient:", error);
+        toast.error(`מחיקת המטופלת נכשלה: ${error.message || "שגיאה לא ידועה"}`);
       }
     }
     setActiveMenuPatientId(null);
@@ -64,7 +66,12 @@ export function PatientList({ patients, showActions = false, userId }: PatientLi
 
   const filteredPatients = patients
     .filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase().trim()))
-    .sort((a, b) => a.name.localeCompare(b.name, "he"));
+    .sort((a, b) => {
+      if (sortBy === "debt") {
+        return b.debt - a.debt;
+      }
+      return a.name.localeCompare(b.name, "he");
+    });
 
   // Long press handling
   const [longPressTimer, setLongPressTimer] = useState<number | null>(null);
@@ -101,30 +108,45 @@ export function PatientList({ patients, showActions = false, userId }: PatientLi
     <div className="space-y-6 pb-12 transition-colors duration-300">
       {showActions && <AddPatient userId={userId} />}
 
-      {/* Search Bar */}
-      <div className="relative mx-1">
-        <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
-          <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-          </svg>
-        </div>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="חיפוש מטופלת לפי שם..."
-          className="block w-full pr-11 pl-10 py-3.5 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border border-gray-200 dark:border-gray-800 rounded-container text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all shadow-sm"
-        />
-        {searchQuery && (
-          <button
-            onClick={() => setSearchQuery("")}
-            className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-          >
-            <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+      {/* Search & Sort Controls */}
+      <div className="flex flex-col sm:flex-row gap-4 px-1">
+        <div className="relative flex-1">
+          <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+            <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
             </svg>
+          </div>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="חיפוש מטופלת לפי שם..."
+            className="block w-full pr-11 pl-10 py-3.5 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border border-gray-200 dark:border-gray-800 rounded-container text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all shadow-sm"
+          />
+        </div>
+        
+        <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-container w-full sm:w-auto">
+          <button
+            onClick={() => setSortBy("debt")}
+            className={`flex-1 sm:px-4 py-2 text-sm font-bold rounded-r-card transition-all ${
+              sortBy === "debt" 
+                ? "bg-white dark:bg-gray-900 shadow-sm text-primary dark:text-white" 
+                : "text-gray-500 hover:text-gray-700 dark:text-gray-400"
+            }`}
+          >
+            לפי חוב
           </button>
-        )}
+          <button
+            onClick={() => setSortBy("name")}
+            className={`flex-1 sm:px-4 py-2 text-sm font-bold rounded-l-card transition-all ${
+              sortBy === "name" 
+                ? "bg-white dark:bg-gray-900 shadow-sm text-primary dark:text-white" 
+                : "text-gray-500 hover:text-gray-700 dark:text-gray-400"
+            }`}
+          >
+            לפי שם
+          </button>
+        </div>
       </div>
       
       <div className="space-y-4">
@@ -136,7 +158,7 @@ export function PatientList({ patients, showActions = false, userId }: PatientLi
             onMouseLeave={endPress}
             onTouchStart={() => startPress(patient._id)}
             onTouchEnd={endPress}
-            className={`relative mx-1 p-5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-container shadow-sm transition-all duration-300 select-none ${
+            className={`relative mx-1 p-5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-container shadow-sm transition-all duration-300 select-none flex flex-col justify-center min-h-[80px] ${
               patient.debtStatus === "cleared" ? "opacity-60" : ""
             } ${pressingPatientId === patient._id ? "scale-[0.98] bg-gray-50 dark:bg-gray-800" : ""}`}
           >
@@ -151,16 +173,18 @@ export function PatientList({ patients, showActions = false, userId }: PatientLi
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
             </button>
 
-            {/* Top Row: Info & Balance */}
-            <div className="flex justify-between items-start mb-2 pl-6">
+            {/* Top Row: Info & Balance Status */}
+            <div className="flex justify-between items-center pl-6">
               <div className="flex items-center gap-2">
                 <div 
                   className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                    patient.debtStatus === "cleared" || patient.debt === 0
+                    patient.debtStatus === "cleared"
                       ? "bg-gray-300 dark:bg-gray-600"
-                      : patient.debtStatus === "paid" || patient.debt < 0
+                      : patient.debt > 0
+                      ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]"
+                      : patient.debt < 0
                       ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]"
-                      : "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]"
+                      : "bg-gray-300 dark:bg-gray-600"
                   }`}
                 />
                 <h4 className="text-lg font-bold text-gray-900 dark:text-white leading-none">
@@ -168,56 +192,35 @@ export function PatientList({ patients, showActions = false, userId }: PatientLi
                 </h4>
               </div>
               
-              <div className="text-left">
-                <span
-                  className={`text-lg font-black ${
-                    patient.debtStatus === "cleared"
-                      ? "text-gray-400 dark:text-gray-600 line-through"
-                      : patient.debt > 0
-                      ? "text-red-600 dark:text-red-400"
-                      : patient.debt < 0
-                      ? "text-green-600 dark:text-green-400"
-                      : "text-gray-900 dark:text-gray-200"
-                  }`}
-                >
-                  {patient.debt > 0 && patient.debtStatus !== "cleared" ? "" : patient.debt < 0 ? "+" : ""}₪
-                  {Math.abs(patient.debt).toFixed(0)}
-                </span>
+              <div className="flex items-center gap-3">
+                <div className="text-left flex flex-col items-end justify-center">
+                  {patient.debtStatus === "cleared" ? (
+                    null
+                  ) : patient.debt === 0 ? (
+                    null
+                  ) : patient.debt > 0 ? (
+                    <div className="flex flex-col items-end justify-center">
+                      <span className="text-lg font-black text-red-600 dark:text-red-400 leading-none">
+                        -₪{Math.abs(patient.debt).toFixed(0)}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-end justify-center">
+                      <span className="text-lg font-black text-green-600 dark:text-green-400 leading-none">
+                        +₪{Math.abs(patient.debt).toFixed(0)}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
             {/* Middle Row: Notes */}
             {patient.notes && (
-              <div className="mb-4">
-                <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">
+              <div className="mt-2">
+                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
                   {patient.notes}
                 </p>
-              </div>
-            )}
-
-            {/* Bottom Row: Action */}
-            {patient.debt > 0 && patient.debtStatus !== "cleared" && (
-              <div className="pt-2 border-t border-gray-50 dark:border-gray-800/50 mt-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openDebtModal(patient);
-                  }}
-                  className="w-full py-2.5 flex items-center justify-center gap-2 text-red-600 dark:text-red-400 text-sm font-bold bg-red-50/50 dark:bg-red-900/10 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-all active:scale-95 border border-red-100/50 dark:border-red-900/20"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>
-                  </svg>
-                  ניהול חוב
-                </button>
-              </div>
-            )}
-
-            {patient.debtStatus === "cleared" && (
-              <div className="mt-2 text-center">
-                <span className="text-[10px] uppercase tracking-wider font-black text-gray-400 dark:text-gray-600 bg-gray-50 dark:bg-gray-800/50 px-3 py-1 rounded-full">
-                  חוב נמחק
-                </span>
               </div>
             )}
 
@@ -228,6 +231,21 @@ export function PatientList({ patients, showActions = false, userId }: PatientLi
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="p-1.5 flex flex-col gap-1">
+                  {patient.debt > 0 && patient.debtStatus !== "cleared" && (
+                    <>
+                      <button 
+                        onClick={() => {
+                          openDebtModal(patient);
+                          setActiveMenuPatientId(null);
+                        }}
+                        className="flex items-center justify-between w-full px-3 py-2.5 text-sm font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                      >
+                        ניהול חוב
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 15h2m-2-4h2m-2-4h2M9 21h6a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2Z"/></svg>
+                      </button>
+                      <div className="h-[1px] bg-gray-100 dark:bg-gray-700 mx-1" />
+                    </>
+                  )}
                   <button 
                     onClick={() => handleEdit(patient)}
                     className="flex items-center justify-between w-full px-3 py-2.5 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-primary/10 hover:text-primary rounded-lg transition-colors"

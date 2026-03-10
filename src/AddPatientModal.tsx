@@ -7,6 +7,7 @@ import { Id } from "../convex/_generated/dataModel";
 interface AddPatientModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: (patientId: Id<"patients">) => void;
   editingPatient?: {
     _id: Id<"patients">;
     name: string;
@@ -15,7 +16,7 @@ interface AddPatientModalProps {
   userId: Id<"users">;
 }
 
-export function AddPatientModal({ isOpen, onClose, editingPatient, userId }: AddPatientModalProps) {
+export function AddPatientModal({ isOpen, onClose, onSuccess, editingPatient, userId }: AddPatientModalProps) {
   const [formData, setFormData] = useState({
     name: "",
     notes: "",
@@ -71,14 +72,16 @@ export function AddPatientModal({ isOpen, onClose, editingPatient, userId }: Add
           sessionRate: 0, // Keeping current simplified logic
         });
         toast.success("פרטי המטופלת עודכנו");
+        if (onSuccess) onSuccess(editingPatient._id);
       } else {
-        await createPatient({
+        const patientId = await createPatient({
           userId,
           name: formData.name.trim(),
           sessionRate: 0,
           notes: formData.notes || undefined,
         });
         toast.success("מטופלת נוספה בהצלחה");
+        if (onSuccess) onSuccess(patientId);
       }
       onClose();
     } catch (error) {
@@ -89,9 +92,9 @@ export function AddPatientModal({ isOpen, onClose, editingPatient, userId }: Add
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-300">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-300">
       <div 
-        className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-md transition-opacity"
+        className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-md transition-opacity"
         onClick={onClose}
       />
       
@@ -127,13 +130,19 @@ export function AddPatientModal({ isOpen, onClose, editingPatient, userId }: Add
             </div>
 
             <div>
-              <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                הערות
-              </label>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
+                  הערות
+                </label>
+                <span className={`text-[10px] font-bold ${formData.notes.length >= 140 ? "text-amber-500" : "text-gray-400"}`}>
+                  {formData.notes.length}/150
+                </span>
+              </div>
               <textarea
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 rows={3}
+                maxLength={150}
                 className="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-black text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                 placeholder="פרטים נוספים, רקע וכו'"
               />

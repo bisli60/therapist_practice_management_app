@@ -7,12 +7,14 @@ import { AddSession } from "./AddSession";
 import { PatientList } from "./PatientList";
 import { SettingsPage } from "./SettingsPage";
 import { ReportsPage } from "./ReportsPage";
+import { ExpensesPage } from "./ExpensesPage";
+import { AddPayment } from "./AddPayment";
 import { FloatingAddButton } from "./FloatingAddButton";
 import { useTheme } from "./lib/useTheme";
 import { Auth } from "./Auth";
 import { Id } from "../convex/_generated/dataModel";
 
-export type Tab = "home" | "treatments" | "patients" | "reports" | "settings";
+export type Tab = "home" | "treatments" | "patients" | "expenses" | "reports" | "settings" | "payments";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
@@ -74,6 +76,14 @@ export default function App() {
           }
         />
         <NavButton
+          active={activeTab === "expenses"}
+          onClick={() => setActiveTab("expenses")}
+          label="הוצאות"
+          icon={
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          }
+        />
+        <NavButton
           active={activeTab === "reports"}
           onClick={() => setActiveTab("reports")}
           label="דוחות"
@@ -111,12 +121,14 @@ function Content({ activeTab, userId, onLogout }: { activeTab: Tab, userId: Id<"
       {activeTab === "home" && <Dashboard userId={userId} />}
       {activeTab === "treatments" && <AddSession userId={userId} />}
       {activeTab === "patients" && <PatientList patients={patients || []} showActions userId={userId} />}
+      {activeTab === "expenses" && <ExpensesPage userId={userId} />}
       {activeTab === "reports" && <ReportsPage userId={userId} />}
       {activeTab === "settings" && <SettingsPage userId={userId} onLogout={onLogout} />}
       {activeTab === "payments" && <AddPayment userId={userId} />}
     </div>
   );
 }
+
 
 function NavButton({ active, onClick, label, icon }: { active: boolean, onClick: () => void, label: string, icon: React.ReactNode }) {
   return (

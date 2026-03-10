@@ -1,22 +1,37 @@
 import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { RecentActivity } from "./RecentActivity";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { DebtManagementModal } from "./DebtManagementModal";
 import { Id } from "../convex/_generated/dataModel";
 
 export function Dashboard({ userId }: { userId: Id<"users"> }) {
-  const patients = useQuery(api.patients.list, userId ? { userId } : "skip") || [];
-  const todayIncome = useQuery(api.payments.getTodayIncome, { userId }) || 0;
-  
+  const patientsQuery = useQuery(api.patients.list, userId ? { userId } : "skip");
+  const todayIncome = useQuery(api.payments.getTodayIncome, { userId });
+  const totalIncome = useQuery(api.payments.getTotalIncome, { userId });
+  const sessions = useQuery(api.sessions.list, { userId });
+  const payments = useQuery(api.payments.list, { userId });
+
   const [selectedPatientForDebt, setSelectedPatientForDebt] = useState<{ _id: Id<"patients">, name: string, debt: number } | null>(null);
   const [isDebtModalOpen, setIsDebtModalOpen] = useState(false);
 
-  const totalDebt = patients.reduce((sum, patient) => sum + (patient.debtStatus !== "cleared" ? Math.max(0, patient.debt) : 0), 0);
-  
-  const patientsWithDebt = patients
-    .filter(p => p.debt > 0 && p.debtStatus !== "cleared")
-    .sort((a, b) => b.debt - a.debt);
+  // Move calculations to useMemo
+  const { totalDebt, patientsWithDebt } = useMemo(() => {
+    if (!patientsQuery) return { totalDebt: 0, patientsWithDebt: [] };
+    
+    const patients = patientsQuery || [];
+    const debt = patients.reduce((sum, patient) => 
+      sum + (patient?.debtStatus !== "cleared" ? Math.max(0, patient?.debt || 0) : 0), 0
+    );
+    
+    const withDebt = patients
+      .filter(p => p && (p.debt || 0) > 0 && p.debtStatus !== "cleared")
+      .sort((a, b) => (b.debt || 0) - (a.debt || 0));
+
+    return { totalDebt: debt, patientsWithDebt: withDebt };
+  }, [patientsQuery]);
+
+  if (sessions === undefined || payments === undefined) return <div className="p-8 text-center">טוען נתונים...</div>;
 
   const openDebtModal = (patient: any) => {
     setSelectedPatientForDebt({ _id: patient._id, name: patient.name, debt: patient.debt });
@@ -30,7 +45,7 @@ export function Dashboard({ userId }: { userId: Id<"users"> }) {
         {/* Today's Income Card */}
         <div className="bg-white dark:bg-gray-900 p-6 rounded-container shadow-sm border border-gray-100 dark:border-gray-800 flex flex-col items-center justify-center transition-all duration-300 h-full min-h-[160px]">
           <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-3">סה"כ הכנסות היום</h3>
-          <p className="text-4xl font-black text-green-600 dark:text-green-400">₪{todayIncome.toFixed(0)}</p>
+          <p className="text-4xl font-black text-green-600 dark:text-green-400">₪{(todayIncome || 0).toFixed(0)}</p>
         </div>
 
         {/* Total Open Debts Card - Detailed Breakdown */}
@@ -66,7 +81,7 @@ export function Dashboard({ userId }: { userId: Id<"users"> }) {
         </div>
       </div>
 
-      <RecentActivity userId={userId} />
+      <RecentActivity userId={userId} sessions={sessions} payments={payments} />
 
       <DebtManagementModal 
         isOpen={isDebtModalOpen} 
