@@ -235,7 +235,7 @@ export function ExpensesPage({ userId }: { userId: Id<"users"> }) {
 
             {requests?.length === 0 && (
               <div className="text-center py-8 text-slate-400 dark:text-slate-600 text-sm italic">
-                עוד אין הודעות... תהיי הראשונה לכתוב!
+                מוזמנת לשלוח את הבקשה הראשונה שלך
               </div>
             )}
           </div>
